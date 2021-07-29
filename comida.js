@@ -61,7 +61,7 @@ var Pedidos = (function(){
                 }
             }
             res.sort((a,b) => {
-                return (a.tmpsolicitado < b.tmpsolicitado)?+1:-1;
+                return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
             });
             return res;
         },
@@ -74,7 +74,7 @@ var Pedidos = (function(){
                 }
             }
             res.sort((a,b) => {
-                return (a.tmpaceptado > b.tmpaceptado)?+1:-1;
+                return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
             });
             return res;
         },
@@ -98,9 +98,6 @@ var Pedidos = (function(){
                     }
                 }
             }
-            res.sort((a,b) => {
-                return (a.tmpaceptado > b.tmpaceptado)?+1:-1;
-            });
             return res;
         },
         getDones: function(){
@@ -112,7 +109,7 @@ var Pedidos = (function(){
                 }
             }
             res.sort((a,b) => {
-                return (a.tmpaceptado > b.tmpaceptado)?+1:-1;
+                return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
             });
             return res;
         },
@@ -125,7 +122,7 @@ var Pedidos = (function(){
                 }
             }
             res.sort((a,b) => {
-                return (a.tmpaceptado > b.tmpaceptado)?+1:-1;
+                return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
             });
             return res;
         },
@@ -799,22 +796,22 @@ rutas.misunatienda = function(vecUrl){
         document.getElementById("lista-item-proceso").innerHTML = "";
         let losItems = Pedidos.getItemDoing();
         let ordenado = document.getElementById('ordenar-items').checked;
-        if(ordenado){
+        if(!ordenado){
             losItems.sort((a,b)=>{
                 if(a.iditem > b.iditem){
-                    return -1;
-                } else if(a.iditem > b.iditem){
                     return +1;
+                } else if(a.iditem < b.iditem){
+                    return -1;
                 } else {
-                    return (a.tmpaceptado > b.tmpaceptado)?+1:-1;
+                    return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
                 }
             });
         } else {
             losItems.sort((a,b)=>{
-                if(a.tmpaceptado > b.tmpaceptado){
-                    return -1;
-                } else if(a.tmpaceptado > b.tmpaceptado){
+                if(a.tmpsolicitado > b.tmpsolicitado){
                     return +1;
+                } else if(a.tmpsolicitado < b.tmpsolicitado){
+                    return -1;
                 } else {
                     return (a.iditem > b.iditem)?+1:-1;
                 }
