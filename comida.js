@@ -29,19 +29,221 @@ window.onhashchange = function(){
 };
 
 //=================================================================
+var Relojes = (function(){
+    let lista = [];
+    setInterval(ciclo,20000);
+    function ciclo(){
+        let ahora = Date.now();
+        let len = lista.length;
+        let minutos;
+        for(let i=0;i<len;i++){
+            let item = lista[i];
+            if(item.creciendo){
+                minutos = Math.ceil((ahora - item.valor)/(60*1000));
+            } else {
+                minutos = Math.ceil((item.valor - ahora)/(60*1000));
+                if(minutos <= 0){
+                    minutos = 0;
+                }
+            }
+            let elemento = document.getElementById(item.id);
+            if(elemento){
+                elemento.innerHTML = minutos;
+                if(!item.creciendo && minutos === 0){
+                    lista.splice(i,1);
+                    i--;
+                    len--;
+                }
+            } else {
+                lista.splice(i,1);
+                i--;
+                len--;
+            }
+        }
+    }
+    return {
+        set: function(id,valor,creciendo){
+            let len = lista.length;
+            for(let i=0;i<len;i++){
+                if(lista[i].id === id){
+                    lista.splice(i,1);
+                    break;
+                }
+            }
+            lista.push({
+                id: id,
+                valor: valor,
+                creciendo: creciendo
+            });
+        }
+    };
+}());
 
-function getMisTiendas(){
-    return Promise.resolve([{
+var Tiendas = (function(){
+    let lista = [];
+    let relojes = [];
+    lista.push({
         id: "sdfasdfsadfsa",
         tipo: "restaurant",
         nombre: "Oveja Negra",
+        
         logo: "",
         direccion: "",
         descripcion: "",
-        latlon: "",
-    }]);
-}
+        lat: 0,
+        lng: 0,
+        calendario: [],
+        estado: "cerrado",
+    });
+    /*
+        la tienda no puede ser agregada por el usuario pare evitar que robe nombres
+        puede cambiar:
+            logo
+            direccion
+            descripcion
+            lat
+            lng
+            calendario
+            estado
+    */
+    function buscar(id){
+        let len = lista.length;
+        for(let i=0;i<len;i++){
+            if(lista[i].id === id){
+                return lista[i];
+            }
+        }
+        return null;
+    }
+    function setReloj(id,futuro){
+        let ahora = Date.now();
+        let timer = setTimeout(function(){
+            Tiendas.setEstado(id,"abierto");
+        },futuro-ahora);
+        relojes.push({
+            id: id,
+            timer: timer
+        });
+        ahora = null;
+    }
+    function clearReloj(id){
+        let len = relojes.length;
+        for(let i=0;i<len;i++){
+            if(relojes[i].id === id){
+                clearTimeout(relojes[i].timer);
+                relojes.splice(i,1);
+                break;
+            }
+        }
+    }
+    return {
+        getUna: function(id){
+            let laTienda = buscar(id);
+            return laTienda;
+        },
+        getLista: function(){
+            return lista;
+        },
+        setHorario: function(id,hora,activo){
+            let laTienda = buscar(id);
+            let pos = laTienda.calendario.indexOf(hora);
+            if(pos>=0){
+                if(!activo){
+                    laTienda.calendario.splice(pos,1);
+                }
+            } else {
+                if(activo){
+                    laTienda.calendario.push(hora);
+                }
+            }
+        },
+        setEstado: function(id,estado){
+            clearReloj(id);
+            let laTienda = buscar(id);
+            laTienda.estado = estado;
+            if(estado.includes("ocupado")){
+                let vec = estado.split("-");
+                let futuro = parseInt(vec[1],10);
+                setReloj(id,futuro);
+            }
+        },
+        setDireccion: function(id,txt){
+            let laTienda = buscar(id);
+            laTienda.direccion = txt;
+        },
+        setDescripcion: function(id,txt){
+            let laTienda = buscar(id);
+            laTienda.descripcion = txt;
+        },
+        setLatLng: function(id,lat,lng){
+            let laTienda = buscar(id);
+            laTienda.lat = lat;
+            laTienda.lng = lng;
+        },
+    };
+}());
 
+var Clientes = (function(){
+    let lista = [];
+    function busqueda(tel){
+        let l = 0;
+        let r = lista.length-1;
+        let m,mtel;
+        while(l<=r){
+            m = Math.floor((l+r)/2);
+            mtel = lista[m].tel;
+            if(mtel < tel){
+                l = m + 1;
+            } else if(mtel > tel){
+                r = m - 1;
+            } else {
+                return m;
+            }
+        }
+        return -1;
+    }
+    function insertar(tel){
+        let l = 0;
+        let r = lista.length-1;
+        let m,mtel;
+        while(l<=r){
+            m = Math.floor((l+r)/2);
+            mtel = lista[m].tel;
+            if(mtel < tel){
+                l = m + 1;
+            } else if(mtel > tel){
+                r = m - 1;
+            }
+        }
+        lista.splice(l, 0, {
+            tel: tel,
+            nroPredido: 1,
+            notas: ""
+        });
+    }
+    return {
+        get: function(telefono){
+            let pos = busqueda(telefono);
+            if(pos>=0){
+                return lista[pos];
+            } else {
+                return {
+                    nroPedido: 0,
+                    notas: ""
+                };
+            }
+        },
+        set: function(telefono){
+            let
+            pos = busqueda(telefono);
+            if(pos>=0){
+                lista[pos].nroPedido++;
+            } else {
+                insertar(telefono);
+            }
+        },
+    };
+}());
 
 var Pedidos = (function(){
     let idTienda;
@@ -78,28 +280,6 @@ var Pedidos = (function(){
             });
             return res;
         },
-        getItemDoing: function(){
-            let len = solicitudes.length;
-            let res = [];
-            for(let i=0;i<len;i++){
-                let unaSolicitud = solicitudes[i];
-                if(unaSolicitud.estado === "doing"){
-                    let lenItems = unaSolicitud.items.length;
-                    for(let j=0;j<lenItems;j++){
-                        let unItem = unaSolicitud.items[j];
-                        for(let k=0;k<unItem.faltan;k++){
-                            res.push({
-                                telefono: unaSolicitud.telefono,
-                                idpedido: unaSolicitud.id,
-                                tmpsolicitado: unaSolicitud.tmpsolicitado,
-                                iditem: unItem.iditem,
-                            });
-                        }
-                    }
-                }
-            }
-            return res;
-        },
         getDones: function(){
             let len = solicitudes.length;
             let res = [];
@@ -126,14 +306,6 @@ var Pedidos = (function(){
             });
             return res;
         },
-        getUna: function(id){
-            let len = solicitudes.length;
-            for(let i=0;i<len;i++){
-                if(solicitudes[i].id === id){
-                    return solicitudes[i];
-                }
-            }
-        },
         
         setDoing: function(id,demora){
             let len = solicitudes.length;
@@ -148,32 +320,18 @@ var Pedidos = (function(){
             }
             return false;
         },
-        setDoneOne: function(idSol,idItem){
-            let res = "error";
+        setDone: function(id){
             let len = solicitudes.length;
             for(let i=0;i<len;i++){
-                if(solicitudes[i].id === idSol){
-                    let acumulador = 0;
-                    let laSolicitud = solicitudes[i];
-                    let losItems = laSolicitud.items;
-                    let lenItems = losItems.length;
-                    for(let j=0;j<lenItems;j++){
-                        if(losItems[j].iditem === idItem){
-                            if(losItems[j].faltan > 0){
-                                losItems[j].faltan--;
-                                res = "ok";
-                            }
-                        }
-                        acumulador += losItems[j].faltan;
+                if(solicitudes[i].id === id){
+                    if(solicitudes[i].estado === "doing"){
+                        solicitudes[i].estado = "done";
+                        return true;
                     }
-                    if(acumulador === 0){
-                        res = "done";
-                        laSolicitud.estado = "done";
-                    }
-                    break;
+                    return false;
                 }
             }
-            return res;
+            return false;
         },
         setDelivered: function(id){
             let len = solicitudes.length;
@@ -191,9 +349,13 @@ var Pedidos = (function(){
         
         newPedido: function(datos){
             datos.id = makeid();
+            datos.etiqueta = Etiquetas.get(),
             datos.estado = "todo";
             datos.tmpsolicitado = Date.now();
             datos.tmpaceptado = 0;
+            let cliente = Clientes.get(datos.telefono);
+            datos.nroPedido = cliente.nroPedido;
+            datos.notaCliente = cliente.notas;
             solicitudes.push(datos);
             if(callback){
                 callback(datos);
@@ -217,6 +379,7 @@ var Productos = (function(){
     let lista = [];
     lista.push({
         id: "hamburguesa1",
+        tienda: "sdfasdfsadfsa",
         nombre: "Hamburguesa simple",
         descripcion: "Pan, carne, lechuga, tomate.",
         estado: "activo",
@@ -225,6 +388,7 @@ var Productos = (function(){
     });
     lista.push({
         id: "hamburguesa2",
+        tienda: "sdfasdfsadfsa",
         nombre: "Hamburguesa con queso",
         descripcion: "Pan, carne, lechuga, tomate, queso.",
         estado: "activo",
@@ -233,6 +397,7 @@ var Productos = (function(){
     });
     lista.push({
         id: "lomito1",
+        tienda: "sdfasdfsadfsa",
         nombre: "Lomito simple",
         descripcion: "Pan, carne, lechuga, tomate.",
         estado: "activo",
@@ -241,16 +406,22 @@ var Productos = (function(){
     });
     lista.push({
         id: "lomito2",
+        tienda: "sdfasdfsadfsa",
         nombre: "Lomito con queso",
         descripcion: "Pan, carne, lechuga, tomate, queso.",
         estado: "activo",
         foto: "https://picsum.photos/200",
         precio: 30,
     });
+    let tienda;
     return {
+        setTienda: function(id){
+            tienda = id;
+        },
         addItem: function(nombre,descripcion,precio,foto){
             lista.push({
                 id: makeid(),
+                tienda: tienda,
                 nombre: nombre,
                 descripcion: descripcion,
                 estado: "pasivo",
@@ -267,13 +438,21 @@ var Productos = (function(){
             }
         },
         getTodos: function(){
-            return lista;
+            let res = [];
+            let len = lista.length;
+            for(let i=0;i<len;i++){
+                if(lista[i].tienda === tienda){
+                    res.push(lista[i]);
+                }
+            }
+            return res;
         },
         getActivos: function(){
             let len = lista.length;
             let res = [];
             for(let i=0;i<len;i++){
-                if(lista[i].estado === "activo"){
+                let item = lista[i];
+                if(item.estado === "activo" && item.tienda === tienda){
                     res.push(lista[i]);
                 }
             }
@@ -283,7 +462,8 @@ var Productos = (function(){
             let len = lista.length;
             let res = [];
             for(let i=0;i<len;i++){
-                if(lista[i].estado !== "activo"){
+                let item = lista[i];
+                if(lista[i].estado !== "activo" && item.tienda === tienda){
                     res.push(lista[i]);
                 }
             }
@@ -314,7 +494,41 @@ var Productos = (function(){
     };
 }());
 
+var Etiquetas = (function(){
+    //https://www.flaticon.com/packs/forest-animals
+    //https://image.flaticon.com/icons/png/512/113/NNNNNN.png
+    let animales = [113269,113266,113280,113279,113287,113271,113272,113268,113277,113283,113273,113289,
+        113275,113290,113292,113293,113291,113267,113288,113286,113284,113281,113278,113282,113285,113265,
+        113264,113270,113274,113276];
+    let colores = ["red","orange","yellow","green","blue","purple"];
+    let usados = [];
+    let ultimoColor = colores.length-1;
+    let ultimoAnimal = 0;
+    return {
+        get: function(){
+            ultimoColor++;
+            if(ultimoColor === colores.length){
+                ultimoColor = 0;
+            }
+            let newAnimal;
+            let newLabel;
+            do{
+                do{
+                    newAnimal = Math.floor(Math.random()*animales.length);
+                }while(newAnimal === ultimoAnimal);
+                newLabel = colores[ultimoColor]+"-"+animales[newAnimal];
+            }while(usados.indexOf(newLabel)>=0);
+            usados.push(newLabel);
+            while(usados.length>100){
+                usados.shift();
+            }
+            return newLabel;
+        }
+    };
+}());
+
 var rutas = [];
+
 rutas.menu = function(){
     var strHtml;
     {strHtml = `
@@ -343,6 +557,9 @@ rutas.menu = function(){
     document.getElementById('pantalla').innerHTML = strHtml;
     strHtml = null;
 };
+
+//-----------------------------------------------------------------
+
 rutas.comidas = function(){
     var strHtml;
     {strHtml = `
@@ -354,8 +571,26 @@ rutas.comidas = function(){
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
     strHtml = null;
+    
+    
 };
+
+//-----------------------------------------------------------------
+
 rutas.mistiendas = function(){
+    let lista = Tiendas.getLista();
+    let len = lista.length;
+    let lasTiendas= "";
+    for(let i=0;i<len;i++){
+        lasTiendas += `
+<div class="col s6 center">
+<a href="#misunatienda/${lista[i].id}">
+<i class="large material-icons">${lista[i].tipo}</i><br>
+${lista[i].nombre}
+</a>
+</div>
+        `;
+    }
     var strHtml;
     {strHtml = `
   <div class="row">
@@ -372,36 +607,21 @@ rutas.mistiendas = function(){
     </div>
     <div class="col s6 center">
       <a href="#misagregar">
-        <i class="large material-icons">miscellaneous_services</i><br>
-        Gestionar Tiendas
+        <i class="large material-icons">add</i><br>
+        Agregar Tienda
       </a>
     </div>
   </div>
-  <div class="row" id="lista"></div>
+  <div class="row" id="lista">${lasTiendas}</div>
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
-    strHtml = null;
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        let strHtml = "";
-        for(let i=0;i<len;i++){
-            strHtml += `
-<div class="col s6 center">
-  <a href="#misunatienda/${lista[i].id}">
-    <i class="large material-icons">${lista[i].tipo}</i><br>
-    ${lista[i].nombre}
-  </a>
-</div>
-            `;
-        }
-        document.getElementById('lista').innerHTML = strHtml;
-    });
 };
 
 //=================================================================
 
 rutas.misunatienda = function(vecUrl){
     let idTienda = vecUrl[1];
+    let laTienda = Tiendas.getUna(idTienda);
     let strHtml;
     {strHtml = `
 <div class="row valign-wrapper">
@@ -411,7 +631,7 @@ rutas.misunatienda = function(vecUrl){
     </a>
   </div>
   <div class="col s10 center" onclick="window.location.href='#misunatienda/${idTienda}'">
-    <h4 id="nombre-local"></h4>
+    <h4>${laTienda.nombre}</h4>
   </div>
 </div>
 <div class="row">
@@ -422,7 +642,7 @@ rutas.misunatienda = function(vecUrl){
   </div>
   <div class="col s4 center" onclick="window.location.href='#misofertas/${idTienda}'">
     <p>
-      Ofertas
+      Catálogo
     </p>
   </div>
   <div class="col s4 center" onclick="window.location.href='#misconfig/${idTienda}'">
@@ -445,27 +665,7 @@ rutas.misunatienda = function(vecUrl){
         <div class="collapsible-header">
           <i class="material-icons">construction</i>Solicitudes en proceso
         </div>
-        <div class="collapsible-body" id="lista-sol-proceso">
-        </div>
-      </li>
-      <li>
-        <div class="collapsible-header">
-          <i class="material-icons">construction</i>Items en proceso
-        </div>
-        <div class="collapsible-body">
-          <div class="row">
-            <div class="col s12">
-              <div class="switch">
-                <label>
-                  Producto
-                  <input type="checkbox" id="ordenar-items">
-                  <span class="lever"></span>
-                  Hora
-                </label>
-              </div>
-            </div>
-          </div>
-          <div id="lista-item-proceso"></div>
+        <div class="collapsible-body" id="lista-proceso">
         </div>
       </li>
       <li>
@@ -485,25 +685,30 @@ rutas.misunatienda = function(vecUrl){
     </ul>
   </div>
 </div>
+<div id="modales" class="modal">
+  <div class="modal-content">
+    <h4>Alerta</h4>
+    <p><span id="modales-texto"></span></p>
+  </div>
+  <div class="modal-footer">
+    <a class="modal-close waves-effect waves-green btn-flat">Canelar</a>
+    <a id="modal-click" class="modal-close waves-effect waves-green btn-flat">ACEPTAR</a>
+  </div>
+</div>
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
     M.Collapsible.init(document.querySelectorAll('.collapsible'));
-    strHtml = null;
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        for(let i=0;i<len;i++){
-            if(lista[i].id === idTienda){
-                document.getElementById('nombre-local').innerHTML = lista[i].nombre;
-                break;
-            }
-        }
-        Pedidos.setTienda(idTienda,printSolicitud);
-        printListSol();
-        printListSolPen();
-        printListItemPen();
-        printListDone();
-        printListDelivered();
-    });
+    M.Modal.init(document.querySelectorAll('.modal'));
+    var instanciaModal = M.Modal.getInstance(document.getElementById("modales"));
+    
+    Productos.setTienda(idTienda);
+    Pedidos.setTienda(idTienda,printSolicitud);
+    printListSol();
+    printListPen();
+    printListDone();
+    printListDelivered();
+    
+    
     function printSolicitud(unaSol){
         let elem = document.getElementById("lista-solicitudes");
         if(!elem){
@@ -511,15 +716,23 @@ rutas.misunatienda = function(vecUrl){
         }
         let ahora = Date.now();
         let delta = Math.ceil((ahora - unaSol.tmpsolicitado)/(60*1000));
+        let vecEtiqueta = unaSol.etiqueta.split("-");
         let strHtml;
         {strHtml = `
 <div class="row">
-  <div class="col s12">
+  <div class="col s9">
     <h4>Tel. ${unaSol.telefono}</h4>
-    <p><b>Demora:</b> ${delta} minutos</p>
+    <p><b>Demora:</b> <span id="reloj-solicitud-${unaSol.id}">${delta}</span> minutos</p>
+    <p><b>Nro Visita:</b> ${unaSol.nroPedido}</p>
+    <p><b>Nota del Cliente:</b><br> ${unaSol.notaCliente}</p>
+    <p><b>Nota del Pedido:</b><br> ${unaSol.nota}</p>
+  </div>
+  <div class="col s3">
+    <img class="responsive-img" src="https://image.flaticon.com/icons/png/512/113/${vecEtiqueta[1]}.png">
   </div>
 </div>
         `;}
+        Relojes.set("reloj-solicitud-"+unaSol.id,unaSol.tmpsolicitado,true);
         let len = unaSol.items.length;
         for(let i=0;i<len;i++){
             let unItem = unaSol.items[i];
@@ -537,7 +750,7 @@ rutas.misunatienda = function(vecUrl){
       <b>Pedidos:</b> ${unItem.cantidad}
     </p>
     <p>
-      <b>Faltantes:</b> ${unItem.faltan}
+      <b>Nota:</b><br>${unItem.nota}
     </p>
   </div>
 </div>
@@ -545,8 +758,8 @@ rutas.misunatienda = function(vecUrl){
         }
         {strHtml += `
 <div class="row">
-  <div class="input-field col s12">
-    <select id="solicitud-${unaSol.id}">
+  <div class="input-field col s12 white">
+    <select id="seleccitud-${unaSol.id}">
       <option value="" disabled selected>Tiempo de entrega</option>
       <option value="5">5 minutos</option>
       <option value="10">10 minutos</option>
@@ -561,7 +774,7 @@ rutas.misunatienda = function(vecUrl){
 </div>
         `;}
         let newDiv = document.createElement("div");
-        newDiv.classList.add("row","blue");
+        newDiv.classList.add("row","z-depth-3",vecEtiqueta[0]);
         newDiv.id = "solicitud-"+unaSol.id;
         newDiv.innerHTML = strHtml;
         document.getElementById("lista-solicitudes").appendChild(newDiv);
@@ -572,14 +785,22 @@ rutas.misunatienda = function(vecUrl){
         let ahora = Date.now();
         let delta = Math.ceil((ahora - unaSol.tmpsolicitado)/(60*1000));
         let strHtml;
+        let vecEtiqueta = unaSol.etiqueta.split("-");
         {strHtml = `
 <div class="row">
-  <div class="col s12">
+  <div class="col s9">
     <h4>Tel. ${unaSol.telefono}</h4>
-    <p><b>Demora:</b> ${delta} minutos</p>
+    <p><b>Demora:</b> <span id="reloj-pedido-${unaSol.id}">${delta}</span> minutos</p>
+    <p><b>Nro Visita:</b> ${unaSol.nroPedido}</p>
+    <p><b>Nota del Cliente:</b><br> ${unaSol.notaCliente}</p>
+    <p><b>Nota del Pedido:</b><br> ${unaSol.nota}</p>
+  </div>
+  <div class="col s3">
+    <img class="responsive-img" src="https://image.flaticon.com/icons/png/512/113/${vecEtiqueta[1]}.png">
   </div>
 </div>
         `;}
+        Relojes.set("reloj-pedido-"+unaSol.id,unaSol.tmpsolicitado,true);
         let len = unaSol.items.length;
         for(let i=0;i<len;i++){
             let unItem = unaSol.items[i];
@@ -597,81 +818,49 @@ rutas.misunatienda = function(vecUrl){
       <b>Pedidos:</b> ${unItem.cantidad}
     </p>
     <p>
-      <b>Faltantes:</b> ${unItem.faltan}
-    </p>
-    <p>
-      <a id="pedido-${unaSol.id}-${unItem.iditem}" class="waves-effect waves-teal btn-flat white">
-        <i class="material-icons right">done</i>Hecho
-      </a>
+      <b>Nota:</b>
+      ${unItem.nota}
     </p>
   </div>
 </div>
             `;}
         }
+        {strHtml += `
+<div class="row right">
+  <div class="col s12">
+    <a class="waves-effect waves-light btn white black-text" id="pedido-${unaSol.id}">
+      <i class="material-icons right">send</i>Terminado
+    </a>
+  </div>
+</div>
+        `;}
+        
         let newDiv = document.createElement("div");
-        newDiv.classList.add("row","blue");
+        newDiv.classList.add("row","z-depth-3",vecEtiqueta[0]);
         newDiv.id = "pedido-"+unaSol.id;
         newDiv.innerHTML = strHtml;
-        document.getElementById("lista-sol-proceso").appendChild(newDiv);
-    }
-    function reprintPedido(unaSol){
-        let elemento = document.getElementById("pedido-"+unaSol.id);
-        if(!elemento){
-            return;
-        }
-        let ahora = Date.now();
-        let delta = Math.ceil((ahora - unaSol.tmpsolicitado)/(60*1000));
-        let strHtml;
-        {strHtml = `
-<div class="row">
-  <div class="col s12">
-    <h4>Tel. ${unaSol.telefono}</h4>
-    <p><b>Demora:</b> ${delta} minutos</p>
-  </div>
-</div>
-        `;}
-        let len = unaSol.items.length;
-        for(let i=0;i<len;i++){
-            let unItem = unaSol.items[i];
-            let unProducto = Productos.getItem(unItem.iditem);
-            {strHtml += `
-<div class="row">
-  <div class="col s5">
-    <img class="responsive-img" src="${unProducto.foto}">
-  </div>
-  <div class="col s7">
-    <p class="center">
-      <b>${unProducto.nombre}</b>
-    </p>
-    <p>
-      <b>Pedidos:</b> ${unItem.cantidad}
-    </p>
-    <p>
-      <b>Faltantes:</b> ${unItem.faltan}
-    </p>
-    <p>
-      <a id="pedido-${unaSol.id}-${unItem.iditem}" class="waves-effect waves-teal btn-flat white">
-        <i class="material-icons right">done</i>Hecho
-      </a>
-    </p>
-  </div>
-</div>
-            `;}
-        }
-        elemento.innerHTML = strHtml;
+        document.getElementById("lista-proceso").appendChild(newDiv);
     }
     function printHecho(unaSol){
         let ahora = Date.now();
         let delta = Math.ceil((ahora - unaSol.tmpsolicitado)/(60*1000));
+        let vecEtiqueta = unaSol.etiqueta.split("-");
         let strHtml;
         {strHtml = `
 <div class="row">
-  <div class="col s12">
+  <div class="col s9">
     <h4>Tel. ${unaSol.telefono}</h4>
-    <p><b>Demora:</b> ${delta} minutos</p>
+    <p><b>Demora:</b> <span id="reloj-hecho-${unaSol.id}">${delta}</span> minutos</p>
+    <p><b>Nro Visita:</b> ${unaSol.nroPedido}</p>
+    <p><b>Nota del Cliente:</b><br> ${unaSol.notaCliente}</p>
+    <p><b>Nota del Pedido:</b><br> ${unaSol.nota}</p>
+  </div>
+  <div class="col s3">
+    <img class="responsive-img" src="https://image.flaticon.com/icons/png/512/113/${vecEtiqueta[1]}.png">
   </div>
 </div>
         `;}
+        Relojes.set("reloj-hecho-"+unaSol.id,unaSol.tmpsolicitado,true);
         let len = unaSol.items.length;
         for(let i=0;i<len;i++){
             let unItem = unaSol.items[i];
@@ -693,26 +882,33 @@ rutas.misunatienda = function(vecUrl){
             `;}
         }
         {strHtml += `
-<div class="row">
+<div class="row right">
   <div class="col s12">
-    <a id="done-click-${unaSol.id}" class="waves-effect waves-teal btn-flat white">
-        <i class="material-icons right">done</i>Enviado
-      </a>
+    <a class="waves-effect waves-light btn white black-text" id="hecho-${unaSol.id}">
+      <i class="material-icons right">send</i>Entregado
+    </a>
   </div>
 </div>
-        `}
+        `;}
         let newDiv = document.createElement("div");
-        newDiv.classList.add("row","blue");
-        newDiv.id = "done-item-"+unaSol.id;
+        newDiv.classList.add("row","z-depth-3",vecEtiqueta[0]);
+        newDiv.id = "done-"+unaSol.id;
         newDiv.innerHTML = strHtml;
         document.getElementById("lista-hecho").appendChild(newDiv);
     }
     function printDelivered(unaSol){
+        let vecEtiqueta = unaSol.etiqueta.split("-");
         let strHtml;
         {strHtml = `
 <div class="row">
-  <div class="col s12">
+  <div class="col s9">
     <h4>Tel. ${unaSol.telefono}</h4>
+    <p><b>Nro Visita:</b> ${unaSol.nroPedido}</p>
+    <p><b>Nota del Cliente:</b><br> ${unaSol.notaCliente}</p>
+    <p><b>Nota del Pedido:</b><br> ${unaSol.nota}</p>
+  </div>
+  <div class="col s3">
+    <img class="responsive-img" src="https://image.flaticon.com/icons/png/512/113/${vecEtiqueta[1]}.png">
   </div>
 </div>
         `;}
@@ -737,45 +933,12 @@ rutas.misunatienda = function(vecUrl){
             `;}
         }
         let newDiv = document.createElement("div");
-        newDiv.classList.add("row","blue");
+        newDiv.classList.add("row","z-depth-3",vecEtiqueta[0]);
         newDiv.id = "delivered-"+unaSol.id;
         newDiv.innerHTML = strHtml;
         document.getElementById("lista-delivered").appendChild(newDiv);
     }
     
-    function printItem(unItem,i){
-        let ahora = Date.now();
-        let delta = Math.ceil((ahora - unItem.tmpsolicitado)/(60*1000));
-        let unProducto = Productos.getItem(unItem.iditem);
-        let strHtml;
-        {strHtml = `
-  <div class="col s5">
-    <img class="responsive-img" src="${unProducto.foto}">
-  </div>
-  <div class="col s7">
-    <p>
-      <b>${unProducto.nombre}</b>
-    </p>
-    <p>
-      <b>Tel. ${unItem.telefono}</b>
-    </p>
-    <p>
-      <b>Demora:</b> ${delta} minutos
-    </p>
-    <p>
-      <a id="clickitem-${unItem.idpedido}-${unItem.iditem}-${i}" class="waves-effect waves-teal btn-flat white">
-        <i class="material-icons right">done</i>Hecho
-      </a>
-    </p>
-  </div>
-        `;}
-        let newDiv = document.createElement("div");
-        newDiv.classList.add("row","blue");
-        newDiv.id = "unitem-"+unItem.idpedido+"-"+unItem.iditem+"-"+i;
-        newDiv.innerHTML = strHtml;
-        document.getElementById("lista-item-proceso").appendChild(newDiv);
-    }
-
     function printListSol(){
         document.getElementById("lista-solicitudes").innerHTML = "";
         let solicitudes = Pedidos.getSolicitudes(printListSol);
@@ -784,42 +947,12 @@ rutas.misunatienda = function(vecUrl){
             printSolicitud(solicitudes[i]);
         }
     }
-    function printListSolPen(){
-        document.getElementById("lista-sol-proceso").innerHTML = "";
+    function printListPen(){
+        document.getElementById("lista-proceso").innerHTML = "";
         let solicitudes = Pedidos.getSolDoing();
         let len = solicitudes.length;
         for(let i=0;i<len;i++){
             printPedido(solicitudes[i]);
-        }
-    }
-    function printListItemPen(){
-        document.getElementById("lista-item-proceso").innerHTML = "";
-        let losItems = Pedidos.getItemDoing();
-        let ordenado = document.getElementById('ordenar-items').checked;
-        if(!ordenado){
-            losItems.sort((a,b)=>{
-                if(a.iditem > b.iditem){
-                    return +1;
-                } else if(a.iditem < b.iditem){
-                    return -1;
-                } else {
-                    return (a.tmpsolicitado > b.tmpsolicitado)?+1:-1;
-                }
-            });
-        } else {
-            losItems.sort((a,b)=>{
-                if(a.tmpsolicitado > b.tmpsolicitado){
-                    return +1;
-                } else if(a.tmpsolicitado < b.tmpsolicitado){
-                    return -1;
-                } else {
-                    return (a.iditem > b.iditem)?+1:-1;
-                }
-            });
-        }
-        let len = losItems.length;
-        for(let i=0;i<len;i++){
-            printItem(losItems[i],i);
         }
     }
     function printListDone(){
@@ -839,96 +972,75 @@ rutas.misunatienda = function(vecUrl){
         }
     }
 
-    let bloqueado = false;
-    function desbloquear(){
-        bloqueado = false;
-    }
     function seleccionador(evento){
         let elid = evento.target.id;
-        elid = elid.replace("solicitud-","");
+        elid = elid.replace("seleccitud-","");
         let valor = evento.target.value;
         let res;
         if(valor === "no"){
-            res = Pedidos.delPedido(elid);
-             M.toast({html:"¡Pedido borrado!"});
+            document.getElementById("seleccitud-"+elid).value = "";
+            M.FormSelect.init(document.querySelectorAll('select'));
+            modalParam.tipo = "borrar";
+            modalParam.id = elid;
+            document.getElementById("modales-texto").innerHTML = "¿Desea eliminar el pedido?";
+            instanciaModal.open();
         } else {
             res = Pedidos.setDoing(elid,parseInt(valor,10));
             if(res){
                 M.toast({html:"¡Pedido aceptado!"});
-                printListSolPen();
-                printListItemPen();
+                document.getElementById("solicitud-"+elid).remove();
+                printListPen();
             }
         }
-        if(res){
-            document.getElementById("solicitud-"+elid).remove();
-        }
     }
-    document.getElementById("lista-sol-proceso").onclick = function(evento){
-        let target = evento.target;
-        while (target.id === ""){
-            target = target.parentNode;
-        }
-        if(target.id === "lista-sol-proceso"){
-            return;
-        }
-        let vec = target.id.split("-");
-        if(vec.length !== 3){
-            return;
-        }
-        
-        if(bloqueado){
-            return;
-        }
-        bloqueado = true;
-        setTimeout(desbloquear,2000);
-        
-        let res = Pedidos.setDoneOne(vec[1],vec[2]);
-        if(res === "done"){
-            document.getElementById("pedido-"+vec[1]).remove();
-            printListDone();
-            printListItemPen();
-            M.toast({html:"¡Hecho!"});
-            M.toast({html:"¡Pedido terminado!"});
-        } else if(res === "ok"){
-            reprintPedido(Pedidos.getUna(vec[1]));
-            printListItemPen();
-            M.toast({html:"¡Hecho!"});
-        }
+    
+    let modalParam = {
+        tipo: "",
+        id: "",
     };
-    document.getElementById("lista-item-proceso").onclick = function(evento){
+    document.getElementById("modal-click").onclick = function(){
+        if(modalParam.tipo === "pedido"){
+            let res = Pedidos.setDone(modalParam.id);
+            if(res){
+                document.getElementById("pedido-"+modalParam.id).remove();
+                printListDone();
+                M.toast({html:"¡Pedido terminado!"});
+            }
+        } else if(modalParam.tipo === "hecho"){
+            let res = Pedidos.setDelivered(modalParam.id);
+            if(res){
+                document.getElementById("done-"+modalParam.id).remove();
+                printListDelivered();
+                M.toast({html:"¡Entregado!"});
+            }
+        } else if(modalParam.tipo === "borrar"){
+            let res = Pedidos.delPedido(modalParam.id);
+            if(res){
+                M.toast({html:"¡Pedido borrado!"});
+                document.getElementById("solicitud-"+modalParam.id).remove();
+            }
+        }
+        modalParam.tipo = "";
+        modalParam.id = "";
+    };
+    document.getElementById("lista-proceso").onclick = function(evento){
         let target = evento.target;
         while (target.id === ""){
             target = target.parentNode;
         }
-        if(target.id === "lista-item-proceso"){
+        if(target.id === "lista-proceso"){
             return;
         }
         let vec = target.id.split("-");
-        if(vec.length !== 4){
-            return;
-        }
-        if(vec[0] !== "clickitem"){
+        if(vec.length !== 2){
             return;
         }
         
-        if(bloqueado){
-            return;
-        }
-        bloqueado = true;
-        setTimeout(desbloquear,2000);
         
-        let res = Pedidos.setDoneOne(vec[1],vec[2]);
-        if(res === "done"){
-            document.getElementById("unitem-"+vec[1]+"-"+vec[2]+"-"+vec[3]).remove();
-            printListDone();
-            printListSolPen();
-            M.toast({html:"¡Hecho!"});
-            M.toast({html:"¡Pedido terminado!"});
-        } else if(res === "ok"){
-            document.getElementById("unitem-"+vec[1]+"-"+vec[2]+"-"+vec[3]).remove();
-            printListSolPen();
-            M.toast({html:"¡Hecho!"});
-        }
+        modalParam.tipo = "pedido";
+        modalParam.id = vec[1];
+        document.getElementById("modales-texto").innerHTML = "¿Pedido terminado?";
+        instanciaModal.open();
     };
     document.getElementById("lista-hecho").onclick = function(evento){
         let target = evento.target;
@@ -939,33 +1051,26 @@ rutas.misunatienda = function(vecUrl){
             return;
         }
         let vec = target.id.split("-");
-        if(vec.length !== 3){
+        if(vec.length !== 2){
             return;
         }
-        if(vec[1] !== "click"){
-            return;
-        }
+
+        modalParam.tipo = "hecho";
+        modalParam.id = vec[1];
+        document.getElementById("modales-texto").innerHTML = "¿Pedido entregado?";
         
-        if(bloqueado){
-            return;
-        }
-        bloqueado = true;
-        setTimeout(desbloquear,2000);
-        
-        let res = Pedidos.setDelivered(vec[2]);
-        if(res){
-            document.getElementById("done-item-"+vec[2]).remove();
-            printListDelivered();
-            M.toast({html:"¡Entregado!"});
-        }
+        var instance = M.Modal.getInstance(document.getElementById("modales"));
+        instanciaModal.open();
     };
-    document.getElementById("ordenar-items").onchange = printListItemPen;
+    
+    strHtml = null; laTienda=null;
 };
 
 //-----------------------------------------------------------------
 
 rutas.misofertas = function(vecUrl){
     let idTienda = vecUrl[1];
+    let laTienda = Tiendas.getUna(idTienda);
     let strHtml;
     {strHtml = `
 <div class="row valign-wrapper">
@@ -975,7 +1080,7 @@ rutas.misofertas = function(vecUrl){
     </a>
   </div>
   <div class="col s10 center" onclick="window.location.href='#misunatienda/${idTienda}'">
-    <h4 id="nombre-local"></h4>
+    <h4>${laTienda.nombre}</h4>
   </div>
 </div>
 <div class="row">
@@ -986,7 +1091,7 @@ rutas.misofertas = function(vecUrl){
   </div>
   <div class="col s4 grey lighten-4 center">
     <p>
-      Ofertas
+      Catálogo
     </p>
   </div>
   <div class="col s4 center" onclick="window.location.href='#misconfig/${idTienda}'">
@@ -1016,17 +1121,9 @@ rutas.misofertas = function(vecUrl){
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
     M.FormSelect.init(document.querySelectorAll('select'));
-    strHtml = null;
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        for(let i=0;i<len;i++){
-            if(lista[i].id === idTienda){
-                document.getElementById('nombre-local').innerHTML = lista[i].nombre;
-                break;
-            }
-        }
-        printTodos();
-    });
+    
+    Productos.setTienda(idTienda);
+    printTodos();
     function printProducto(unProducto){
         let strHtml;
         {strHtml = `
@@ -1100,6 +1197,7 @@ rutas.misofertas = function(vecUrl){
         if(mostrando !== "todos"){
             document.getElementById('unproducto-'+elid).remove();
         }
+        M.toast({html: "Se cambió el estado de este producto"});
     }
     document.getElementById('selector').onchange = function(){
         let val = document.getElementById('selector').value;
@@ -1115,14 +1213,15 @@ rutas.misofertas = function(vecUrl){
                 break;
         }
     };
+    strHtml = null; laTienda = null;
 };
-
 
 //-----------------------------------------------------------------
 
 rutas.miseditoferta = function(vecUrl){
     let idTienda = vecUrl[1];
     let idProducto = vecUrl[2];
+    let laTienda = Tiendas.getUna(idTienda);
     let unProducto = Productos.getItem(idProducto);
     let strHtml;
     {strHtml = `
@@ -1133,7 +1232,7 @@ rutas.miseditoferta = function(vecUrl){
     </a>
   </div>
   <div class="col s10 center" onclick="window.location.href='#misunatienda/${idTienda}'">
-    <h4 id="nombre-local"></h4>
+    <h4>${laTienda.nombre}</h4>
   </div>
 </div>
 <div class="row">
@@ -1181,17 +1280,8 @@ rutas.miseditoferta = function(vecUrl){
 </div>
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
-    strHtml = null;
     M.updateTextFields();
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        for(let i=0;i<len;i++){
-            if(lista[i].id === idTienda){
-                document.getElementById('nombre-local').innerHTML = lista[i].nombre;
-                break;
-            }
-        }
-    });
+    
     document.getElementById("enviar").onclick = function(){
         let nombre = document.getElementById("nombre").value;
         let descripcion = document.getElementById("descripcion").value;
@@ -1222,12 +1312,14 @@ rutas.miseditoferta = function(vecUrl){
             }
         });
     };
+    strHtml = null; laTienda= null;
 };
 
 //-----------------------------------------------------------------
 
 rutas.misnewproducto = function(vecUrl){
     let idTienda = vecUrl[1];
+    let laTienda = Tiendas.getUna(idTienda);
     let strHtml;
     {strHtml = `
 <div class="row valign-wrapper">
@@ -1237,7 +1329,7 @@ rutas.misnewproducto = function(vecUrl){
     </a>
   </div>
   <div class="col s10 center" onclick="window.location.href='#misunatienda/${idTienda}'">
-    <h4 id="nombre-local"></h4>
+    <h4>${laTienda.nombre}</h4>
   </div>
 </div>
 <div class="row">
@@ -1280,17 +1372,9 @@ rutas.misnewproducto = function(vecUrl){
 </div>
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
-    strHtml = null;
+    
+    Productos.setTienda(idTienda);
     M.updateTextFields();
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        for(let i=0;i<len;i++){
-            if(lista[i].id === idTienda){
-                document.getElementById('nombre-local').innerHTML = lista[i].nombre;
-                break;
-            }
-        }
-    });
     document.getElementById("enviar").onclick = function(){
         let nombre = document.getElementById("nombre").value;
         let descripcion = document.getElementById("descripcion").value;
@@ -1322,12 +1406,14 @@ rutas.misnewproducto = function(vecUrl){
             }
         });
     };
+    strHtml = null; laTienda = null;
 };
 
 //-----------------------------------------------------------------
 
 rutas.misconfig = function(vecUrl){
     let idTienda = vecUrl[1];
+    let laTienda = Tiendas.getUna(idTienda);
     let strHtml;
     {strHtml = `
 <div class="row valign-wrapper">
@@ -1337,22 +1423,291 @@ rutas.misconfig = function(vecUrl){
     </a>
   </div>
   <div class="col s10 center" onclick="window.location.href='#misunatienda/${idTienda}'">
-    <h4 id="nombre-local"></h4>
+    <h4>${laTienda.nombre}</h4>
   </div>
 </div>
+<div class="row">
+  <div class="col s4 center" onclick="window.location.href='#misunatienda/${idTienda}'">
+    <p>
+      Pedidos
+    </p>
+  </div>
+  <div class="col s4 center" onclick="window.location.href='#misofertas/${idTienda}'">
+    <p>
+      Catálogo
+    </p>
+  </div>
+  <div class="col s4 grey lighten-4 center">
+    <p>
+      Config
+    </p>
+  </div>
+</div>
+<div class="row">
+  <div class="col s12 center">
+    <h4 id="estado"></h4>
+  </div>
+</div>
+<div class="row">
+  <div class="col s12">
+    <ul class="collapsible">
+      <li>
+        <div class="collapsible-header">
+          <i class="material-icons">autorenew</i>Cambiar Estado
+        </div>
+        <div class="collapsible-body">
+          <div class="row">
+            <div class="input-field col s12">
+              <select id="select-estado">
+                <option value="" disabled selected>Cambiar estado</option>
+                <option value="abierto">Abierto</option>
+                <option value="cerrado">Cerrado</option>
+                <option value="ocupado-5">Ocupado 5 min</option>
+                <option value="ocupado-10">Ocupado 10 min</option>
+                <option value="ocupado-20">Ocupado 20 min</option>
+                <option value="ocupado-30">Ocupado 30 min</option>
+                <option value="ocupado-45">Ocupado 45 min</option>
+                <option value="ocupado-60">Ocupado 1 hora</option>
+                <option value="ocupado-90">Ocupado 1 hora 30 min</option>
+                <option value="ocupado-120">Ocupado 2 horas</option>
+              </select>
+              <label>Materialize Select</label>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="collapsible-header">
+          <i class="material-icons">edit_calendar</i>Horarios de atención
+        </div>
+        <div class="collapsible-body">
+          <table>
+            <thead>
+              <tr>
+                <th></th><th>Do</th><th>Lu</th><th>Ma</th><th>Mi</th><th>Ju</th><th>Vi</th><th>Sa</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-horario">
+              ${printHorario()}
+            </tbody>
+          </table>
+        </div>
+      </li>
+      <li>
+        <div class="collapsible-header">
+          <i class="material-icons">settings</i>Datos Generales
+        </div>
+        <div class="collapsible-body">
+          <div class="row">
+            <div class="col s12">
+              <div class="row">
+                <div class="input-field col s12">
+                  <textarea id="descripcion" class="materialize-textarea">${laTienda.descripcion}</textarea>
+                  <label for="descripcion">Descripción</label>
+                </div>
+              </div>
+              <div class="row right">
+                <div class="col s12">
+                  <a class="waves-effect waves-light btn" id="actual-descripcion">
+                    <i class="material-icons right">check</i>Actualizar
+                  </a>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="row">
+                <div class="input-field col s12">
+                  <input id="direccion" type="text" class="validate" value="${laTienda.direccion}">
+                  <label for="direccion">Direccion</label>
+                </div>
+              </div>
+              <div class="row right">
+                <div class="col s12">
+                  <a class="waves-effect waves-light btn" id="actual-direccion">
+                    <i class="material-icons right">check</i>Actualizar
+                  </a>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="row">
+                <div class="input-field col s12">
+                  <input id="latlng" type="text" class="validate" value="${laTienda.lat},${laTienda.lng}">
+                  <label for="latlng">Ubicación (lat,lng)</label>
+                </div>
+              </div>
+              <div class="row right">
+                <div class="col s12">
+                  <a class="waves-effect waves-light btn" id="actual-latlng">
+                    <i class="material-icons right">check</i>Actualizar
+                  </a>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="row">
+                <div class="col s12">
+                  <div class="file-field input-field">
+                    <div class="btn">
+                      <i class="material-icons">photo_camera</i>
+                      <input type="file" id="foto">
+                    </div>
+                    <div class="file-path-wrapper">
+                      <input class="file-path validate" type="text" placeholder="Subir archivo de logo">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="row right">
+                <div class="col s12">
+                  <a class="waves-effect waves-light btn" id="actual-foto">
+                    <i class="material-icons right">check</i>Actualizar
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+</div>
+
     `;}
     document.getElementById('pantalla').innerHTML = strHtml;
-    strHtml = null;
-    getMisTiendas().then(lista => {
-        let len = lista.length;
-        for(let i=0;i<len;i++){
-            if(lista[i].id === idTienda){
-                document.getElementById('nombre-local').innerHTML = lista[i].nombre;
-                break;
-            }
-        }
-    });
+    M.Collapsible.init(document.querySelectorAll('.collapsible'));
+    M.FormSelect.init(document.querySelectorAll('select'));
+    M.updateTextFields();
+    M.textareaAutoResize(document.getElementById("descripcion"));
     
+    actualHorario();
+    printEstado(laTienda.estado);
+    
+    document.getElementById("tabla-horario").onclick = function(evento){
+        let target = evento.target;
+        while (target.id === ""){
+            target = target.parentNode;
+        }
+        if(target.id === "tabla-horario"){
+            return;
+        }
+        let elemento = document.getElementById(target.id);
+        if(target.id.includes("dom") || target.id.includes("mar") || target.id.includes("jue") || target.id.includes("sab")){
+            if(elemento.classList.contains("orange")){
+                elemento.classList.remove("orange");
+                elemento.classList.add("grey");
+            } else {
+                elemento.classList.remove("grey");
+                elemento.classList.add("orange");
+            }
+        } else {
+            elemento.classList.toggle("orange");
+        }
+        Tiendas.setHorario(idTienda,target.id,elemento.classList.contains("orange"));
+    };
+    document.getElementById("select-estado").onchange = function(){
+        let estado = document.getElementById("select-estado").value;
+        let nvoEstado;
+        if(estado === "abierto" || estado === "cerrado"){
+            nvoEstado = estado;
+        } else {
+            let vec = estado.split("-");
+            let minutos = parseInt(vec[1],10);
+            let milis = minutos*60*1000;
+            milis += Date.now();
+            nvoEstado = "ocupado-" + milis;
+        }
+        Tiendas.setEstado(idTienda,nvoEstado);
+        printEstado(nvoEstado);
+    };
+    document.getElementById("actual-descripcion").onclick = function(){
+        let descripcion = document.getElementById("descripcion").value;
+        descripcion = descripcion.trim();
+        if(descripcion === ""){
+            M.toast({html:"Agregue una descripción de su local"});
+            return;
+        }
+        Tiendas.setDescripcion(idTienda,descripcion);
+    };
+    document.getElementById("actual-direccion").onclick = function(){
+        let direccion = document.getElementById("direccion").value;
+        direccion = direccion.trim();
+        if(direccion === ""){
+            M.toast({html:"Agregue la dirección de su local"});
+            return;
+        }
+        Tiendas.setDireccion(idTienda,direccion);
+    };
+    document.getElementById("actual-latlng").onclick = function(){
+        let latlng = document.getElementById("latlng").value;
+        let vec = latlng.split(",");
+        if(vec.length !== 2){
+            M.toast({html:"Formato de ubicación en mapa incorrecto"});
+            M.toast({html:"latitud,longitud"});
+            return;
+        }
+        let lat = parseFloat(vec[0],10);
+        let lng = parseFloat(vec[1],10);
+        Tiendas.setLatLng(idTienda,lat,lng);
+    };
+    
+    
+    function printEstado(status){
+        let estado;
+        if(status === "cerrado"){
+            estado= "Cerrado";
+        } else if(status === "abierto"){
+            estado= "Abierto";
+        } else if(status.includes("ocupado-")){
+            let vecEstado = status.split("-");
+            let tmpFin = parseInt(vecEstado[1],10);
+            let ahora = Date.now();
+            if(ahora >= tmpFin){
+                estado = "Abierto";
+            } else {
+                let delta = Math.ceil((tmpFin - ahora)/(60*1000));
+                estado = `Ocupado: <span id="reloj-estado-tienda">${delta}</span> min`;
+            }
+            Relojes.set("reloj-estado-tienda",tmpFin,false);
+        }
+        document.getElementById("estado").innerHTML = estado;
+    }
+    function printHorario(){
+        let strHtml = "";
+        for(let i=0;i<24;i++){
+            strHtml += `
+<tr>
+  <td>${i}:00</td>
+  <td id="dom-${i}-00" class="grey lighten-3"></td>
+  <td id="lun-${i}-00" class="lighten-3"></td>
+  <td id="mar-${i}-00" class="grey lighten-3"></td>
+  <td id="mie-${i}-00" class="lighten-3"></td>
+  <td id="jue-${i}-00" class="grey lighten-3"></td>
+  <td id="vie-${i}-00" class="lighten-3"></td>
+  <td id="sab-${i}-00" class="grey lighten-3"></td>
+</tr>
+<tr>
+  <td>${i}:30</td>
+  <td id="dom-${i}-30" class="grey lighten-3"></td>
+  <td id="lun-${i}-30" class="lighten-3"></td>
+  <td id="mar-${i}-30" class="grey lighten-3"></td>
+  <td id="mie-${i}-30" class="lighten-3"></td>
+  <td id="jue-${i}-30" class="grey lighten-3"></td>
+  <td id="vie-${i}-30" class="lighten-3"></td>
+  <td id="sab-${i}-30" class="grey lighten-3"></td>
+</tr>
+            `;
+        }
+        return strHtml;
+    }
+    function actualHorario(){
+        let len = laTienda.calendario.length;
+        for(let i=0;i<len;i++){
+            let elemento = document.getElementById(laTienda.calendario[i]);
+            if(elemento.classList.contains("grey")){
+                elemento.classList.remove("grey");
+            }
+            elemento.classList.add("orange");
+        }
+    }
+    strHtml = null; laTienda = null;
 };
 
 //=================================================================
@@ -1368,6 +1723,19 @@ function makeid(){
 }
 
 function simulador(){
+    setTimeout(simulador,2*60*1000);
+    let laTienda =Tiendas.getUna("sdfasdfsadfsa");
+    if(laTienda.estado === "cerrado"){
+        M.toast({html: "La tienda no está trabajando"});
+        return;
+    }
+    if(laTienda.estado.includes("ocupado")){
+        M.toast({html: "La tienda está ocupada en este momento. Vuelva en pocos minutos."});
+        return;
+    }
+    
+    Productos.setTienda(laTienda.id);
+    
     let listaProductos = Productos.getActivos();
     let lenProductos = listaProductos.length;
     let ran = Math.random();
@@ -1396,15 +1764,13 @@ function simulador(){
         losItems.push({
             iditem: listaProductos[prueba].id,
             cantidad: nroPedidos,
-            faltan: nroPedidos,
+            nota: "nota item"
         });
     }
     
     Pedidos.newPedido({
         telefono: "" + (60000000 + Math.floor(Math.random()*(79999999 - 60000000))),
-        nota: "xxx",
+        nota: "nota pedido",
         items: losItems
     });
-    
-    setTimeout(simulador,60*1000);
 }
